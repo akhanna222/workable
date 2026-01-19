@@ -129,16 +129,35 @@ CREATE TABLE IF NOT EXISTS public.user_settings (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE UNIQUE NOT NULL,
 
-    -- API Keys (encrypted)
+    -- API Keys (should be encrypted in production via pgcrypto)
     anthropic_api_key TEXT,
-    vercel_api_token TEXT,
-    netlify_api_token TEXT,
-    github_access_token TEXT,
+    openai_api_key TEXT,
+    vercel_token TEXT,
+    netlify_token TEXT,
+    github_token TEXT,
 
-    -- Preferences
-    editor_theme TEXT DEFAULT 'dark',
-    editor_font_size INTEGER DEFAULT 14,
-    auto_save BOOLEAN DEFAULT TRUE,
+    -- Flags for checking if keys exist (avoid exposing actual keys)
+    has_anthropic_key BOOLEAN DEFAULT FALSE,
+    has_openai_key BOOLEAN DEFAULT FALSE,
+    has_vercel_token BOOLEAN DEFAULT FALSE,
+    has_netlify_token BOOLEAN DEFAULT FALSE,
+    has_github_token BOOLEAN DEFAULT FALSE,
+
+    -- User preferences (stored as JSONB for flexibility)
+    settings JSONB DEFAULT '{
+        "default_framework": "react",
+        "default_styling": "tailwind",
+        "default_language": "typescript",
+        "editor_theme": "vs-dark",
+        "editor_font_size": 14,
+        "editor_tab_size": 2,
+        "editor_word_wrap": true,
+        "email_notifications": true,
+        "deploy_notifications": true,
+        "collaboration_notifications": true,
+        "profile_public": false,
+        "show_activity": true
+    }'::jsonb,
 
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
