@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useEffect, useCallback } from 'react';
-import { Send, Loader2, Sparkles, StopCircle } from 'lucide-react';
+import { Send, Loader2, Sparkles, StopCircle, Bot, Code, Database, Server, Cloud, CheckCircle2, Search } from 'lucide-react';
 import { ChatMessage } from './chat-message';
 import { cn } from '@/lib/utils';
 
@@ -20,6 +20,12 @@ interface File {
   language?: string | null;
 }
 
+interface AgentEvent {
+  type: 'agent_start' | 'agent_complete' | 'task_start' | 'task_complete';
+  agentRole: string;
+  message: string;
+}
+
 interface ChatPanelProps {
   projectId: string;
   conversationId: string | null;
@@ -28,6 +34,16 @@ interface ChatPanelProps {
   onFilesUpdate: (files: File[]) => void;
   disabled?: boolean;
 }
+
+// Agent role display configuration
+const AGENT_CONFIG: Record<string, { icon: React.ElementType; color: string; name: string }> = {
+  orchestrator: { icon: Bot, color: 'text-purple-400', name: 'Project Architect' },
+  ui: { icon: Code, color: 'text-blue-400', name: 'UI Engineer' },
+  backend: { icon: Server, color: 'text-green-400', name: 'Backend Engineer' },
+  database: { icon: Database, color: 'text-yellow-400', name: 'Database Architect' },
+  devops: { icon: Cloud, color: 'text-orange-400', name: 'DevOps Engineer' },
+  reviewer: { icon: Search, color: 'text-pink-400', name: 'Code Reviewer' },
+};
 
 export function ChatPanel({
   projectId,
@@ -40,6 +56,8 @@ export function ChatPanel({
   const [input, setInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
   const [streamingContent, setStreamingContent] = useState('');
+  const [agentEvents, setAgentEvents] = useState<AgentEvent[]>([]);
+  const [activeAgent, setActiveAgent] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -51,7 +69,7 @@ export function ChatPanel({
 
   useEffect(() => {
     scrollToBottom();
-  }, [messages, streamingContent, scrollToBottom]);
+  }, [messages, streamingContent, agentEvents, scrollToBottom]);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -79,6 +97,8 @@ export function ChatPanel({
     setInput('');
     setIsGenerating(true);
     setStreamingContent('');
+    setAgentEvents([]);
+    setActiveAgent(null);
 
     abortControllerRef.current = new AbortController();
 
@@ -123,6 +143,14 @@ export function ChatPanel({
             } else if (parsed.type === 'files') {
               filesUpdated = parsed.files;
               onFilesUpdate(filesUpdated);
+            } else if (parsed.type === 'event') {
+              const event = parsed.event as AgentEvent;
+              setAgentEvents((prev) => [...prev, event]);
+              if (event.type === 'agent_start' || event.type === 'task_start') {
+                setActiveAgent(event.agentRole);
+              } else if (event.type === 'agent_complete') {
+                setActiveAgent(null);
+              }
             } else if (parsed.type === 'error') {
               throw new Error(parsed.message);
             }
@@ -154,6 +182,7 @@ export function ChatPanel({
     } finally {
       setIsGenerating(false);
       setStreamingContent('');
+      setActiveAgent(null);
       abortControllerRef.current = null;
     }
   };
@@ -162,6 +191,8 @@ export function ChatPanel({
     abortControllerRef.current?.abort();
     setIsGenerating(false);
     setStreamingContent('');
+    setAgentEvents([]);
+    setActiveAgent(null);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -207,11 +238,16 @@ export function ChatPanel({
           />
         )}
 
-        {/* Loading indicator */}
-        {isGenerating && !streamingContent && (
+        {/* Agent Status Display */}
+        {isGenerating && agentEvents.length > 0 && (
+          <AgentStatusDisplay events={agentEvents} activeAgent={activeAgent} />
+        )}
+
+        {/* Loading indicator (only shown before any agent events) */}
+        {isGenerating && !streamingContent && agentEvents.length === 0 && (
           <div className="flex items-center gap-2 text-gray-400">
             <Loader2 className="w-4 h-4 animate-spin" />
-            <span className="text-sm">Thinking...</span>
+            <span className="text-sm">Analyzing request...</span>
           </div>
         )}
 
@@ -270,6 +306,90 @@ export function ChatPanel({
           Press Enter to send, Shift+Enter for new line
         </p>
       </div>
+    </div>
+  );
+}
+
+function AgentStatusDisplay({
+  events,
+  activeAgent,
+}: {
+  events: AgentEvent[];
+  activeAgent: string | null;
+}) {
+  // Get unique agents that have been involved
+  const involvedAgents = Array.from(new Set(events.map(e => e.agentRole)));
+
+  // Get the latest event for each agent
+  const latestEventByAgent = events.reduce((acc, event) => {
+    acc[event.agentRole] = event;
+    return acc;
+  }, {} as Record<string, AgentEvent>);
+
+  return (
+    <div className="bg-gray-900/50 rounded-lg p-4 border border-gray-800">
+      <div className="flex items-center gap-2 mb-3">
+        <Bot className="w-4 h-4 text-purple-400" />
+        <span className="text-sm font-medium text-white">Multi-Agent Team at Work</span>
+      </div>
+
+      <div className="space-y-2">
+        {involvedAgents.map((agentRole) => {
+          const config = AGENT_CONFIG[agentRole] || { icon: Bot, color: 'text-gray-400', name: agentRole };
+          const Icon = config.icon;
+          const latestEvent = latestEventByAgent[agentRole];
+          const isActive = activeAgent === agentRole;
+          const isCompleted = latestEvent?.type === 'agent_complete' || latestEvent?.type === 'task_complete';
+
+          return (
+            <div
+              key={agentRole}
+              className={cn(
+                'flex items-center gap-3 px-3 py-2 rounded-lg transition-all',
+                isActive ? 'bg-gray-800 border border-gray-700' : 'bg-transparent'
+              )}
+            >
+              <div className={cn('flex-shrink-0', config.color)}>
+                {isActive ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : isCompleted ? (
+                  <CheckCircle2 className="w-4 h-4 text-green-400" />
+                ) : (
+                  <Icon className="w-4 h-4" />
+                )}
+              </div>
+
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className={cn(
+                    'text-sm font-medium',
+                    isActive ? 'text-white' : 'text-gray-400'
+                  )}>
+                    {config.name}
+                  </span>
+                  {isActive && (
+                    <span className="px-1.5 py-0.5 text-xs bg-blue-500/20 text-blue-400 rounded">
+                      Working
+                    </span>
+                  )}
+                </div>
+                <p className="text-xs text-gray-500 truncate">
+                  {latestEvent?.message || 'Waiting...'}
+                </p>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {activeAgent && (
+        <div className="mt-3 pt-3 border-t border-gray-800">
+          <div className="flex items-center gap-2 text-xs text-gray-500">
+            <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
+            <span>Processing your request...</span>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
