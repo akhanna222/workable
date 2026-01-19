@@ -3,6 +3,12 @@ import { createClient } from '@/lib/supabase/server';
 import { Sidebar } from '@/components/layout/sidebar';
 import { Header } from '@/components/layout/header';
 
+interface Workspace {
+  id: string;
+  name: string;
+  slug: string;
+}
+
 export default async function DashboardLayout({
   children,
 }: {
@@ -29,12 +35,17 @@ export default async function DashboardLayout({
     .from('workspace_members')
     .select(
       `
-      workspace:workspaces(*)
+      workspace:workspaces(id, name, slug)
     `
     )
     .eq('user_id', user.id);
 
-  const userWorkspaces = workspaces?.map((w) => w.workspace).filter(Boolean) || [];
+  const userWorkspaces: Workspace[] = (workspaces || [])
+    .flatMap((w: { workspace: Workspace[] | Workspace | null }) => {
+      if (Array.isArray(w.workspace)) return w.workspace;
+      if (w.workspace) return [w.workspace];
+      return [];
+    });
 
   return (
     <div className="h-screen flex bg-gray-950">

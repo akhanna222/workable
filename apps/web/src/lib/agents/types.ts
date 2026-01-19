@@ -76,6 +76,7 @@ export interface OrchestratorPlan {
     agent: AgentRole;
     description: string;
     files: string[];
+    dependencies?: number[]; // Order numbers of tasks this depends on
   }[];
   estimatedFiles: number;
 }

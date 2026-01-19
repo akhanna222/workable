@@ -88,11 +88,13 @@ function ProjectCard({ project }: { project: any }) {
           <h3 className="font-semibold text-white group-hover:text-blue-400 transition-colors truncate">
             {project.name}
           </h3>
-          {project.is_public ? (
-            <Globe className="w-4 h-4 text-gray-500 flex-shrink-0 ml-2" title="Public" />
-          ) : (
-            <Lock className="w-4 h-4 text-gray-500 flex-shrink-0 ml-2" title="Private" />
-          )}
+          <span title={project.is_public ? 'Public' : 'Private'}>
+            {project.is_public ? (
+              <Globe className="w-4 h-4 text-gray-500 flex-shrink-0 ml-2" />
+            ) : (
+              <Lock className="w-4 h-4 text-gray-500 flex-shrink-0 ml-2" />
+            )}
+          </span>
         </div>
 
         {project.description && (

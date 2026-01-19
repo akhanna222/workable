@@ -2,6 +2,7 @@
 const nextConfig = {
   reactStrictMode: true,
   transpilePackages: ['@repo/ui', '@repo/shared'],
+  output: 'standalone', // Enable for Docker deployment
   images: {
     remotePatterns: [
       {

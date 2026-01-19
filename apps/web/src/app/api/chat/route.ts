@@ -623,7 +623,7 @@ function App() {
             <div className="flex items-end gap-4 h-64">
               {salesData.map(item => (
                 <div key={item.month} className="flex-1 flex flex-col items-center gap-2">
-                  <div className="text-sm font-medium text-gray-600">${(item.sales/1000).toFixed(0)}k</div>
+                  <div className="text-sm font-medium text-gray-600">\${(item.sales/1000).toFixed(0)}k</div>
                   <div
                     className="w-full bg-gradient-to-t from-blue-600 to-blue-400 rounded-t-lg transition-all hover:from-blue-700 hover:to-blue-500 cursor-pointer"
                     style={{ height: \`\${(item.sales / maxSales) * 100}%\` }}

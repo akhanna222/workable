@@ -5,7 +5,7 @@ import { ChevronRight, ChevronDown, File, Folder } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface FileData {
-  id: string;
+  id?: string;
   path: string;
   content: string | null;
 }

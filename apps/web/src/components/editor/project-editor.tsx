@@ -12,10 +12,10 @@ import {
 } from '@/components/ui/resizable';
 
 interface File {
-  id: string;
+  id?: string;
   path: string;
   content: string | null;
-  language: string | null;
+  language?: string | null;
 }
 
 interface Message {
