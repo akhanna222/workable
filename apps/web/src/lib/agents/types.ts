@@ -97,10 +97,12 @@ export type AgentEventType =
   | 'agent_thinking'
   | 'agent_writing'
   | 'agent_completed'
+  | 'agent_error'
   | 'file_created'
   | 'file_modified'
   | 'task_started'
   | 'task_completed'
+  | 'task_skipped'
   | 'error';
 
 export interface AgentEvent {

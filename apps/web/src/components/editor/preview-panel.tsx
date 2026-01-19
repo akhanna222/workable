@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import {
   RefreshCw,
   Smartphone,
@@ -10,6 +10,8 @@ import {
   Loader2,
   AlertCircle,
   Play,
+  Terminal,
+  Zap,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -24,6 +26,7 @@ interface PreviewPanelProps {
 }
 
 type DeviceSize = 'mobile' | 'tablet' | 'desktop';
+type PreviewMode = 'static' | 'sandbox';
 
 const DEVICE_SIZES: Record<DeviceSize, { width: string; label: string }> = {
   mobile: { width: '375px', label: 'Mobile' },
@@ -36,7 +39,61 @@ export function PreviewPanel({ projectId, files }: PreviewPanelProps) {
   const [refreshKey, setRefreshKey] = useState(0);
   const [status, setStatus] = useState<'idle' | 'starting' | 'running' | 'error'>('idle');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [previewMode, setPreviewMode] = useState<PreviewMode>('static');
+  const [sandboxError, setSandboxError] = useState<string | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
+
+  // Start sandbox session
+  const startSandbox = useCallback(async () => {
+    if (files.length === 0) return;
+
+    setStatus('starting');
+    setSandboxError(null);
+
+    try {
+      const response = await fetch('/api/sandbox', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'create',
+          projectId,
+          files: files.map(f => ({ path: f.path, content: f.content || '' })),
+        }),
+      });
+
+      const data = await response.json();
+
+      if (data.previewUrl) {
+        setPreviewUrl(data.previewUrl);
+        setPreviewMode('sandbox');
+        setStatus('running');
+      } else {
+        // Sandbox created but no URL - use static preview
+        setPreviewMode('static');
+        setStatus('running');
+      }
+    } catch (error: any) {
+      console.error('Sandbox error:', error);
+      setSandboxError(error.message);
+      setPreviewMode('static');
+      setStatus('error');
+    }
+  }, [projectId, files]);
+
+  // Update sandbox files when they change
+  useEffect(() => {
+    if (previewMode === 'sandbox' && status === 'running' && files.length > 0) {
+      fetch('/api/sandbox', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'update',
+          projectId,
+          files: files.map(f => ({ path: f.path, content: f.content || '' })),
+        }),
+      }).catch(console.error);
+    }
+  }, [files, previewMode, status, projectId]);
 
   // Generate preview HTML from files
   const previewHtml = generatePreviewHtml(files);
@@ -100,12 +157,61 @@ export function PreviewPanel({ projectId, files }: PreviewPanelProps) {
         </div>
 
         <div className="flex items-center gap-1">
+          {/* Preview Mode Toggle */}
+          <div className="flex items-center border border-gray-700 rounded overflow-hidden mr-2">
+            <button
+              onClick={() => setPreviewMode('static')}
+              className={cn(
+                'px-2 py-1 text-xs transition-colors',
+                previewMode === 'static'
+                  ? 'bg-gray-700 text-white'
+                  : 'text-gray-400 hover:text-white'
+              )}
+              title="Static Preview (faster)"
+            >
+              Static
+            </button>
+            <button
+              onClick={startSandbox}
+              className={cn(
+                'px-2 py-1 text-xs transition-colors flex items-center gap-1',
+                previewMode === 'sandbox'
+                  ? 'bg-blue-600 text-white'
+                  : 'text-gray-400 hover:text-white'
+              )}
+              title="Live Sandbox (E2B)"
+              disabled={status === 'starting'}
+            >
+              {status === 'starting' ? (
+                <Loader2 className="w-3 h-3 animate-spin" />
+              ) : (
+                <Zap className="w-3 h-3" />
+              )}
+              Live
+            </button>
+          </div>
+
           {/* Status Indicator */}
           <div className="flex items-center gap-2 px-2 text-xs">
-            {files.length > 0 ? (
+            {status === 'starting' ? (
               <>
-                <div className="w-2 h-2 rounded-full bg-green-500" />
-                <span className="text-gray-400">Preview</span>
+                <Loader2 className="w-3 h-3 animate-spin text-blue-400" />
+                <span className="text-blue-400">Starting...</span>
+              </>
+            ) : status === 'error' ? (
+              <>
+                <AlertCircle className="w-3 h-3 text-red-400" />
+                <span className="text-red-400">Error</span>
+              </>
+            ) : files.length > 0 ? (
+              <>
+                <div className={cn(
+                  'w-2 h-2 rounded-full',
+                  previewMode === 'sandbox' ? 'bg-blue-500' : 'bg-green-500'
+                )} />
+                <span className="text-gray-400">
+                  {previewMode === 'sandbox' ? 'Sandbox' : 'Preview'}
+                </span>
               </>
             ) : (
               <>
@@ -157,14 +263,25 @@ export function PreviewPanel({ projectId, files }: PreviewPanelProps) {
               maxWidth: '100%',
             }}
           >
-            <iframe
-              ref={iframeRef}
-              key={refreshKey}
-              srcDoc={previewHtml}
-              className="w-full h-full border-0"
-              sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
-              title="Preview"
-            />
+            {previewMode === 'sandbox' && previewUrl ? (
+              <iframe
+                ref={iframeRef}
+                key={refreshKey}
+                src={previewUrl}
+                className="w-full h-full border-0"
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
+                title="Live Preview"
+              />
+            ) : (
+              <iframe
+                ref={iframeRef}
+                key={refreshKey}
+                srcDoc={previewHtml}
+                className="w-full h-full border-0"
+                sandbox="allow-scripts allow-same-origin allow-forms allow-popups"
+                title="Static Preview"
+              />
+            )}
           </div>
         )}
       </div>

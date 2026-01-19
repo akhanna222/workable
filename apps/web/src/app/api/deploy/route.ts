@@ -11,10 +11,40 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
     }
 
-    const { projectId, provider, token } = await request.json();
+    const { projectId, provider, token: providedToken } = await request.json();
 
     if (!projectId || !provider) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+    }
+
+    // Try to get token from: 1) request, 2) user settings, 3) platform env
+    let token = providedToken;
+    if (!token) {
+      // Try user's saved token
+      const { data: userSettings } = await supabase
+        .from('user_settings')
+        .select('vercel_token, netlify_token')
+        .eq('user_id', user.id)
+        .single();
+
+      if (userSettings) {
+        const settings = userSettings as { vercel_token?: string; netlify_token?: string };
+        token = provider === 'vercel' ? settings.vercel_token : settings.netlify_token;
+      }
+    }
+
+    if (!token) {
+      // Fall back to platform token
+      token = provider === 'vercel'
+        ? process.env.VERCEL_TOKEN
+        : process.env.NETLIFY_TOKEN;
+    }
+
+    if (!token) {
+      return NextResponse.json(
+        { error: `No ${provider} token configured. Add your token in Settings or contact support.` },
+        { status: 400 }
+      );
     }
 
     // Get project files
